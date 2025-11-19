@@ -89,4 +89,3 @@ agent_project/
 - [ ] Add agent routing/selection mechanism
 - [ ] Implement conversation memory for RAG agent
 - [ ] Add document metadata filtering
-
