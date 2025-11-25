@@ -1,16 +1,19 @@
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
 from langchain_postgres import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.vectorstores import VectorStoreRetriever
 
+load_dotenv()
 
-DOCS_COLLECTION_NAME: str = "ml_articles_collection"
-CONNECTION_STRING: str = (
-    "postgresql://postgres:mysecretpassword@localhost:5432/vector_db"
+DOCS_COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
+CONNECTION_STRING: str = os.getenv(
+    "POSTGRES_CONNECTION_STRING",
+    "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",
 )
-EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 
 def initialize_vector_store() -> Optional[PGVector]:

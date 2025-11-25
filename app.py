@@ -1,7 +1,10 @@
+import os
 from typing import Dict, Optional
+from pathlib import Path
 
 import streamlit as st
-from langchain_ollama import ChatOllama
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -9,12 +12,17 @@ from langchain_core.runnables import RunnablePassthrough
 from rag_agent import build_rag_chain
 from router_agent import build_router_chain
 
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
+
 
 def initialize_tutor_chain() -> RunnablePassthrough:
-    """
-    Initialize the base ML tutor chain without access to external documents.
-    """
-    llm: ChatOllama = ChatOllama(model="phi3:mini")
+
+    llm = ChatOpenAI(
+        model=os.getenv("XAI_MODEL", "grok-4-1-fast-non-reasoning"),
+        base_url=os.getenv("XAI_BASE_URL", "https://api.x.ai/v1"),
+        api_key=os.getenv("XAI_API_KEY"),
+    )
 
     prompt_template: ChatPromptTemplate = ChatPromptTemplate.from_messages(
         [
@@ -27,7 +35,9 @@ def initialize_tutor_chain() -> RunnablePassthrough:
                     "insights. Adapt your teaching style to the user's level of understanding. "
                     "Cover topics such as supervised learning, unsupervised learning, deep "
                     "learning, neural networks, model evaluation, feature engineering, and "
-                    "other ML concepts."
+                    "other ML concepts. "
+                    "Do not use emojis, tables, or complex formatting unless explicitly "
+                    "requested by the user."
                 ),
             ),
             ("human", "{user_input}"),
@@ -47,10 +57,13 @@ def initialize_tutor_chain() -> RunnablePassthrough:
 def main() -> None:
     st.set_page_config(page_title="ML Learning Agent", layout="wide")
     
+    if not os.getenv("XAI_API_KEY"):
+        st.error("Пожалуйста, установите переменную окружения XAI_API_KEY. (Please set the XAI_API_KEY environment variable.)")
+
+
     st.title("Machine Learning Learning Agent")
     st.caption("Multi-agent system for learning various machine learning topics")
     
-    # Initialize all agents in session state
     if (
         "tutor_chain" not in st.session_state
         or "rag_chain" not in st.session_state
@@ -61,7 +74,6 @@ def main() -> None:
             st.session_state.rag_chain = build_rag_chain()
             st.session_state.router_chain = build_router_chain()
     
-    # Initialize chat history in session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
@@ -70,22 +82,17 @@ def main() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # User input field
     user_question: Optional[str] = st.chat_input("Ask about machine learning topics...")
     
     if user_question:
-        # Add user message to history
         st.session_state.messages.append({"role": "user", "content": user_question})
 
-        # Display user message
         with st.chat_message("user"):
             st.markdown(user_question)
         
-        # Generate and display assistant response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Decide which agent should handle the question
                     route: str = st.session_state.router_chain.invoke(user_question)
 
                     if route == "RAG":
@@ -106,7 +113,6 @@ def main() -> None:
                             {"role": "assistant", "content": answer}
                         )
                     else:
-                        # Default to tutor agent
                         response: str = st.session_state.tutor_chain.invoke(
                             user_question
                         )

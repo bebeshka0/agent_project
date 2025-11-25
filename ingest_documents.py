@@ -1,17 +1,23 @@
 import os
 from typing import List, Optional
+
+from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_postgres import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings  # Обновленный импорт
 from langchain_core.documents import Document
 
+load_dotenv()
 
 # Configuration constants
-DOCS_FOLDER: str = "documents"
-EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
-CONNECTION_STRING: str = "postgresql://postgres:mysecretpassword@localhost:5432/vector_db"  
-COLLECTION_NAME: str = "ml_articles_collection"
+DOCS_FOLDER: str = os.getenv("DOCS_FOLDER", "documents")
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+CONNECTION_STRING: str = os.getenv(
+    "POSTGRES_CONNECTION_STRING",
+    "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",
+)
+COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
 
 
 def load_pdf_documents(folder_path: str) -> List[Document]:
@@ -69,13 +75,11 @@ def ingest_documents() -> Optional[PGVector]:
 
     print("Starting document ingestion process")
 
-    # Check if docs folder exists
     if not os.path.exists(DOCS_FOLDER):
         print(f"Error: Folder '{DOCS_FOLDER}' not found.")
         print(f"Please create folder '{DOCS_FOLDER}' and place PDF files in it.")
         return None
 
-    # Load PDF documents
     documents: List[Document] = load_pdf_documents(DOCS_FOLDER)
 
     if not documents:
@@ -92,21 +96,17 @@ def ingest_documents() -> Optional[PGVector]:
     # Clean documents from NUL characters before writing to PostgreSQL
     cleaned_splits: List[Document] = clean_documents(splits)
 
-    # Initialize embedding model
     print(f"Initializing embedding model: {EMBEDDING_MODEL}...")
     embeddings: HuggingFaceEmbeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
-    # Store vectors in PostgreSQL
     print(f"Saving vectors to PostgreSQL (Collection: {COLLECTION_NAME})...")
 
     try:
-        # This method creates table if it does not exist and adds documents
         vector_store: PGVector = PGVector.from_documents(
             embedding=embeddings,
             documents=cleaned_splits,
             collection_name=COLLECTION_NAME,
             connection=CONNECTION_STRING,
-            # pre_delete_collection=True  # Uncomment to delete and recreate collection
         )
         print("Document ingestion completed successfully.")
         return vector_store

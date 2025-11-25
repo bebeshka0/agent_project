@@ -1,10 +1,11 @@
+import os
 from typing import Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_core.output_parsers import StrOutputParser
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 from rag_vector_store import get_retriever
 
@@ -32,15 +33,11 @@ def retrieve_rag_context(question: str, k: int = 5) -> Tuple[str, List[Document]
         print("RAG retriever is not available. Check database connection and configuration.")
         return "", []
 
-    # Support both older and newer retriever interfaces:
-    # - Older: retriever.get_relevant_documents(question)
-    # - Newer (Runnable): retriever.invoke(question)
     if hasattr(retriever, "get_relevant_documents"):
         documents: List[Document] = retriever.get_relevant_documents(question)
     else:
         documents = retriever.invoke(question)
 
-    # Console logging for transparency and debugging
     print("Retrieved documents from PGVector:")
     if not documents:
         print("No documents retrieved for this question.")
@@ -58,7 +55,11 @@ def retrieve_rag_context(question: str, k: int = 5) -> Tuple[str, List[Document]
 
 
 def build_rag_chain() -> Runnable:
-    llm: ChatOllama = ChatOllama(model="phi3:mini")
+    llm = ChatOpenAI(
+        model=os.getenv("XAI_MODEL", "grok-4-1-fast-non-reasoning"),
+        base_url=os.getenv("XAI_BASE_URL", "https://api.x.ai/v1"),
+        api_key=os.getenv("XAI_API_KEY"),
+    )
 
     prompt_template: ChatPromptTemplate = ChatPromptTemplate.from_messages(
         [
@@ -68,7 +69,9 @@ def build_rag_chain() -> Runnable:
                     "You are a research assistant that answers strictly based on the "
                     "provided context from uploaded documents. If the answer is not "
                     "contained in the context, explicitly say that you do not know. "
-                    "Do not use any external knowledge beyond the given context."
+                    "Do not use any external knowledge beyond the given context. "
+                    "Do not use emojis, tables, or complex formatting unless explicitly "
+                    "requested by the user."
                 ),
             ),
             (
