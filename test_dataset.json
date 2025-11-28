@@ -1,0 +1,42 @@
+[
+    {
+        "question": "How do the switching speeds of biological neurons compare to modern transistors?",
+        "ground_truth": "Biological neurons have a switching time of approximately 10^-3 seconds, which is significantly slower than transistors, which have a switching time of approximately 10^-9 seconds."
+    },
+    {
+        "question": "What was the main criticism of the Perceptron published by Minsky and Papert in 1969?",
+        "ground_truth": "Minsky and Papert mathematically demonstrated that the single-layer perceptron could not solve non-linearly separable problems, such as the XOR function, which led to a decline in research funding for neural networks."
+    },
+    {
+        "question": "What is the function of the 'propagation function' in an artificial neuron?",
+        "ground_truth": "The propagation function converts the vector inputs (outputs from other neurons) into a scalar network input, typically by calculating the weighted sum of the inputs."
+    },
+    {
+        "question": "How is a 'bias neuron' used to handle threshold values in a neural network?",
+        "ground_truth": "A bias neuron is an extra neuron whose output is always 1. It is connected to other neurons with a weight equal to the negative of their threshold value, allowing the threshold to be trained just like any other weight."
+    },
+    {
+        "question": "What defines 'Unsupervised Learning' in the context of neural networks?",
+        "ground_truth": "In unsupervised learning, the training set consists only of input patterns without any corresponding target results. The network independently attempts to detect similarities and classify patterns into categories."
+    },
+    {
+        "question": "What is the purpose of the 'momentum term' in the backpropagation algorithm?",
+        "ground_truth": "The momentum term adds a fraction of the previous weight change to the current weight change. This helps the network pass through flat spots on the error surface more quickly and dampens oscillations in steep canyons."
+    },
+    {
+        "question": "How does information processing in a Radial Basis Function (RBF) neuron differ from a standard perceptron neuron?",
+        "ground_truth": "Instead of a weighted sum, an RBF neuron calculates the distance (norm) between the input vector and its center, and then passes this distance through a radial basis function (like a Gaussian bell curve) to determine its output."
+    },
+    {
+        "question": "What is the 'stability/plasticity dilemma' in neural networks?",
+        "ground_truth": "It is the problem where a neural network needs to be plastic enough to learn new patterns, but stable enough to not forget or destroy previously learned information when learning something new."
+    },
+    {
+        "question": "How is the 'winner' neuron determined in a Self-Organizing Map (SOM)?",
+        "ground_truth": "The winner neuron is the specific neuron in the network whose position (center) in the input space has the smallest distance (e.g., Euclidean distance) to the current input pattern."
+    },
+    {
+        "question": "In Reinforcement Learning, what is the definition of a 'policy'?",
+        "ground_truth": "A policy is a mapping from situations (states) to the probabilities of selecting specific actions. It essentially represents the strategy the agent uses to determine what to do in a given situation to maximize reward."
+    }
+]

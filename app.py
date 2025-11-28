@@ -1,6 +1,7 @@
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from pathlib import Path
+import tempfile
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 
 from rag_agent import build_rag_chain
 from router_agent import build_router_chain
+from ingest_documents import ingest_documents
 
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
@@ -57,13 +59,49 @@ def initialize_tutor_chain() -> RunnablePassthrough:
 def main() -> None:
     st.set_page_config(page_title="ML Learning Agent", layout="wide")
     
-    if not os.getenv("XAI_API_KEY"):
-        st.error("Пожалуйста, установите переменную окружения XAI_API_KEY. (Please set the XAI_API_KEY environment variable.)")
-
 
     st.title("Machine Learning Learning Agent")
     st.caption("Multi-agent system for learning various machine learning topics")
-    
+
+    # Sidebar for file uploads
+    with st.sidebar:
+        st.header("Document Upload")
+        st.markdown(
+            "Upload your own PDF documents to add them to the knowledge base."
+        )
+        uploaded_files = st.file_uploader(
+            "Choose PDF files", type=["pdf"], accept_multiple_files=True
+        )
+
+        if uploaded_files and st.button("Ingest Documents"):
+            with st.spinner("Ingesting documents..."):
+                temp_file_paths: List[str] = []
+                
+                # Save uploaded files to temporary files
+                for uploaded_file in uploaded_files:
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".pdf"
+                    ) as tmp_file:
+                        tmp_file.write(uploaded_file.getvalue())
+                        temp_file_paths.append(tmp_file.name)
+
+                try:
+                    # Ingest documents without clearing existing collection
+                    ingest_documents(source_files=temp_file_paths, cleanup=False)
+                    st.success(f"Successfully ingested {len(uploaded_files)} documents!")
+                    
+                    st.session_state.rag_chain = build_rag_chain()
+                    
+                except Exception as e:
+                    st.error(f"Error ingesting documents: {str(e)}")
+                finally:
+                    # Cleanup temporary files
+                    for path in temp_file_paths:
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+
     if (
         "tutor_chain" not in st.session_state
         or "rag_chain" not in st.session_state

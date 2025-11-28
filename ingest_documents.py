@@ -1,11 +1,12 @@
 import os
+import re
 from typing import List, Optional
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_postgres import PGVector
-from langchain_huggingface import HuggingFaceEmbeddings  # Обновленный импорт
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document
 
 load_dotenv()
@@ -20,18 +21,37 @@ CONNECTION_STRING: str = os.getenv(
 COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
 
 
-def load_pdf_documents(folder_path: str) -> List[Document]:
+def clean_text_content(text: str) -> str:
+    
+    text = text.replace("\x00", "")
+    # Replace single newlines with space (lookbehind/lookahead ensures we don't touch \n\n)
+    text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+    
+    # Replace multiple spaces with single space
+    text = re.sub(r' +', ' ', text)
+    
+    return text.strip()
 
-    loaders: List[PyPDFLoader] = [
-        PyPDFLoader(os.path.join(folder_path, filename))
-        for filename in os.listdir(folder_path)
-        if filename.endswith(".pdf")
-    ]
+
+def load_pdf_files(file_paths: List[str]) -> List[Document]:
+    """
+    Load and clean PDF documents from a list of file paths.
+    """
+    loaders: List[PyPDFLoader] = [PyPDFLoader(fp) for fp in file_paths]
 
     documents: List[Document] = []
     for loader in loaders:
         try:
-            documents.extend(loader.load())
+            raw_docs = loader.load()
+            for doc in raw_docs:
+                # Clean content immediately using our helper
+                doc.page_content = clean_text_content(doc.page_content)
+                # Clean metadata from NUL characters
+                doc.metadata = {
+                    k: (v.replace("\x00", "") if isinstance(v, str) else v)
+                    for k, v in doc.metadata.items()
+                }
+            documents.extend(raw_docs)
         except Exception as e:
             file_path: str = getattr(loader, "file_path", "unknown")
             print(f"Error loading file {file_path}: {e}")
@@ -39,74 +59,81 @@ def load_pdf_documents(folder_path: str) -> List[Document]:
     return documents
 
 
+def load_pdf_documents(folder_path: str) -> List[Document]:
+
+    file_paths = [
+        os.path.join(folder_path, filename)
+        for filename in os.listdir(folder_path)
+        if filename.endswith(".pdf")
+    ]
+    return load_pdf_files(file_paths)
+
+
 def split_documents(
     documents: List[Document],
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
+    embeddings: HuggingFaceEmbeddings,
 ) -> List[Document]:
-
-    text_splitter: RecursiveCharacterTextSplitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+    
+    print("Initializing Semantic Chunker...")
+    # Uses embedding similarity to determine where to split
+    text_splitter = SemanticChunker(
+        embeddings,
+        breakpoint_threshold_type="percentile"
     )
+    
     return text_splitter.split_documents(documents)
 
 
-def clean_documents(documents: List[Document]) -> List[Document]:
+def ingest_documents(
+    source_files: Optional[List[str]] = None, cleanup: bool = True
+) -> Optional[PGVector]:
+    """
+    Ingest documents into the vector store.
 
-    cleaned_documents: List[Document] = []
-
-    for document in documents:
-        cleaned_content: str = document.page_content.replace("\x00", "")
-
-        cleaned_metadata: dict = {
-            key: (value.replace("\x00", "") if isinstance(value, str) else value)
-            for key, value in document.metadata.items()
-        }
-
-        cleaned_documents.append(
-            Document(page_content=cleaned_content, metadata=cleaned_metadata)
-        )
-
-    return cleaned_documents
-
-
-def ingest_documents() -> Optional[PGVector]:
-
+    Args:
+        source_files: List of specific file paths to ingest. If None, scans DOCS_FOLDER.
+        cleanup: Whether to delete existing collection before adding new documents.
+    """
     print("Starting document ingestion process")
 
-    if not os.path.exists(DOCS_FOLDER):
-        print(f"Error: Folder '{DOCS_FOLDER}' not found.")
-        print(f"Please create folder '{DOCS_FOLDER}' and place PDF files in it.")
-        return None
+    documents: List[Document] = []
 
-    documents: List[Document] = load_pdf_documents(DOCS_FOLDER)
+    if source_files:
+        print(f"Ingesting {len(source_files)} specific files...")
+        documents = load_pdf_files(source_files)
+    else:
+        if not os.path.exists(DOCS_FOLDER):
+            print(f"Error: Folder '{DOCS_FOLDER}' not found.")
+            print(f"Please create folder '{DOCS_FOLDER}' and place PDF files in it.")
+            return None
+        # 1. Load documents (cleaning happens inside)
+        documents = load_pdf_documents(DOCS_FOLDER)
 
     if not documents:
-        print(f"No PDF documents found in folder '{DOCS_FOLDER}'.")
+        print("No valid documents found to ingest.")
         print("Ingestion process aborted.")
         return None
 
     print(f"Loaded {len(documents)} pages from PDF files.")
-
-    # Split documents into chunks
-    splits: List[Document] = split_documents(documents)
-    print(f"Split text into {len(splits)} chunks.")
-
-    # Clean documents from NUL characters before writing to PostgreSQL
-    cleaned_splits: List[Document] = clean_documents(splits)
-
+    
+    # 2. Initialize embeddings (needed for both splitting and storage)
     print(f"Initializing embedding model: {EMBEDDING_MODEL}...")
     embeddings: HuggingFaceEmbeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+
+    # 3. Split documents using Semantic Chunking
+    splits: List[Document] = split_documents(documents, embeddings)
+    print(f"Split text into {len(splits)} semantic chunks.")
 
     print(f"Saving vectors to PostgreSQL (Collection: {COLLECTION_NAME})...")
 
     try:
+        # 4. Save to DB (with auto-cleanup of old data)
         vector_store: PGVector = PGVector.from_documents(
             embedding=embeddings,
-            documents=cleaned_splits,
+            documents=splits,
             collection_name=COLLECTION_NAME,
             connection=CONNECTION_STRING,
+            pre_delete_collection=cleanup,  # Use the cleanup flag
         )
         print("Document ingestion completed successfully.")
         return vector_store
