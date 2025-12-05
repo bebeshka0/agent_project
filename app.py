@@ -1,64 +1,14 @@
 import os
-from typing import Dict, Optional, List
-from pathlib import Path
-import tempfile
+from typing import List, Optional
 
 import streamlit as st
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+import requests
 
-from rag_agent import build_rag_chain
-from router_agent import build_router_chain
-from ingest_documents import ingest_documents
-
-env_path = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=env_path, override=True)
-
-
-def initialize_tutor_chain() -> RunnablePassthrough:
-
-    llm = ChatOpenAI(
-        model=os.getenv("XAI_MODEL", "grok-4-1-fast-non-reasoning"),
-        base_url=os.getenv("XAI_BASE_URL", "https://api.x.ai/v1"),
-        api_key=os.getenv("XAI_API_KEY"),
-    )
-
-    prompt_template: ChatPromptTemplate = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                (
-                    "You are an expert AI tutor specializing in machine learning education. "
-                    "Your role is to teach various machine learning topics clearly and "
-                    "comprehensively. Provide detailed explanations, examples, and practical "
-                    "insights. Adapt your teaching style to the user's level of understanding. "
-                    "Cover topics such as supervised learning, unsupervised learning, deep "
-                    "learning, neural networks, model evaluation, feature engineering, and "
-                    "other ML concepts. "
-                    "Do not use emojis, tables, or complex formatting unless explicitly "
-                    "requested by the user."
-                ),
-            ),
-            ("human", "{user_input}"),
-        ]
-    )
-
-    chain: RunnablePassthrough = (
-        {"user_input": RunnablePassthrough()}
-        | prompt_template
-        | llm
-        | StrOutputParser()
-    )
-
-    return chain
-
+# API Configuration
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 def main() -> None:
     st.set_page_config(page_title="ML Learning Agent", layout="wide")
-    
 
     st.title("Machine Learning Learning Agent")
     st.caption("Multi-agent system for learning various machine learning topics")
@@ -74,44 +24,29 @@ def main() -> None:
         )
 
         if uploaded_files and st.button("Ingest Documents"):
-            with st.spinner("Ingesting documents..."):
-                temp_file_paths: List[str] = []
-                
-                # Save uploaded files to temporary files
-                for uploaded_file in uploaded_files:
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".pdf"
-                    ) as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        temp_file_paths.append(tmp_file.name)
-
+            with st.spinner("Uploading and starting ingestion..."):
                 try:
-                    # Ingest documents without clearing existing collection
-                    ingest_documents(source_files=temp_file_paths, cleanup=False)
-                    st.success(f"Successfully ingested {len(uploaded_files)} documents!")
-                    
-                    st.session_state.rag_chain = build_rag_chain()
-                    
-                except Exception as e:
-                    st.error(f"Error ingesting documents: {str(e)}")
-                finally:
-                    # Cleanup temporary files
-                    for path in temp_file_paths:
-                        try:
-                            os.remove(path)
-                        except OSError:
-                            pass
+                    # Prepare files for upload
+                    files_to_send = []
+                    for uploaded_file in uploaded_files:
+                        # tuple format: (filename, file_object, content_type)
+                        files_to_send.append(
+                            ("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf"))
+                        )
 
-    if (
-        "tutor_chain" not in st.session_state
-        or "rag_chain" not in st.session_state
-        or "router_chain" not in st.session_state
-    ):
-        with st.spinner("Initializing multi-agent system..."):
-            st.session_state.tutor_chain = initialize_tutor_chain()
-            st.session_state.rag_chain = build_rag_chain()
-            st.session_state.router_chain = build_router_chain()
-    
+                    # Send POST request to FastAPI
+                    response = requests.post(f"{API_URL}/ingest", files=files_to_send)
+                    response.raise_for_status()
+                    
+                    data = response.json()
+                    st.success(data.get("message", "Documents uploaded successfully!"))
+                    st.info("Processing is running in the background. You can continue chatting.")
+
+                except requests.exceptions.ConnectionError:
+                     st.error("Error: Could not connect to the backend API.")
+                except Exception as e:
+                    st.error(f"Error uploading documents: {str(e)}")
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
@@ -131,36 +66,39 @@ def main() -> None:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    route: str = st.session_state.router_chain.invoke(user_question)
+                    # Call FastAPI backend
+                    response = requests.post(
+                        f"{API_URL}/chat",
+                        json={"question": user_question}
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    answer: str = data.get("answer", "")
+                    source: str = data.get("source", "TUTOR")
+                    context: Optional[str] = data.get("context")
 
-                    if route == "RAG":
-                        rag_result: Dict[str, str] = st.session_state.rag_chain.invoke(
-                            user_question
-                        )
-                        answer: str = rag_result.get("answer", "")
-                        context: str = rag_result.get("context", "")
-
+                    if source == "RAG":
                         st.caption("Router: used RAG agent (documents-based answer)")
                         st.markdown(answer)
 
                         if context:
                             with st.expander("Retrieved context from documents"):
                                 st.text(context)
-
-                        st.session_state.messages.append(
-                            {"role": "assistant", "content": answer}
-                        )
                     else:
-                        response: str = st.session_state.tutor_chain.invoke(
-                            user_question
-                        )
                         st.caption("Router: used TUTOR agent (theoretical explanation)")
-                        st.markdown(response)
-                        st.session_state.messages.append(
-                            {"role": "assistant", "content": response}
-                        )
+                        st.markdown(answer)
+                        
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": answer}
+                    )
+
+                except requests.exceptions.ConnectionError:
+                    error_message = "Error: Could not connect to the backend API. Is it running?"
+                    st.error(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
                 except Exception as e:
-                    error_message: str = f"Error: {str(e)}"
+                    error_message = f"Error: {str(e)}"
                     st.error(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
 

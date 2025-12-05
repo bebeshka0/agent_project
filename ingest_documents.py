@@ -11,7 +11,6 @@ from langchain_core.documents import Document
 
 load_dotenv()
 
-# Configuration constants
 DOCS_FOLDER: str = os.getenv("DOCS_FOLDER", "documents")
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 CONNECTION_STRING: str = os.getenv(
@@ -24,19 +23,16 @@ COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
 def clean_text_content(text: str) -> str:
     
     text = text.replace("\x00", "")
-    # Replace single newlines with space (lookbehind/lookahead ensures we don't touch \n\n)
+    # Replace single newlines with space
     text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
     
-    # Replace multiple spaces with single space
     text = re.sub(r' +', ' ', text)
     
     return text.strip()
 
 
 def load_pdf_files(file_paths: List[str]) -> List[Document]:
-    """
-    Load and clean PDF documents from a list of file paths.
-    """
+
     loaders: List[PyPDFLoader] = [PyPDFLoader(fp) for fp in file_paths]
 
     documents: List[Document] = []
@@ -44,7 +40,6 @@ def load_pdf_files(file_paths: List[str]) -> List[Document]:
         try:
             raw_docs = loader.load()
             for doc in raw_docs:
-                # Clean content immediately using our helper
                 doc.page_content = clean_text_content(doc.page_content)
                 # Clean metadata from NUL characters
                 doc.metadata = {
@@ -87,13 +82,7 @@ def split_documents(
 def ingest_documents(
     source_files: Optional[List[str]] = None, cleanup: bool = True
 ) -> Optional[PGVector]:
-    """
-    Ingest documents into the vector store.
 
-    Args:
-        source_files: List of specific file paths to ingest. If None, scans DOCS_FOLDER.
-        cleanup: Whether to delete existing collection before adding new documents.
-    """
     print("Starting document ingestion process")
 
     documents: List[Document] = []
@@ -106,7 +95,7 @@ def ingest_documents(
             print(f"Error: Folder '{DOCS_FOLDER}' not found.")
             print(f"Please create folder '{DOCS_FOLDER}' and place PDF files in it.")
             return None
-        # 1. Load documents (cleaning happens inside)
+        # Load documents 
         documents = load_pdf_documents(DOCS_FOLDER)
 
     if not documents:
@@ -116,24 +105,24 @@ def ingest_documents(
 
     print(f"Loaded {len(documents)} pages from PDF files.")
     
-    # 2. Initialize embeddings (needed for both splitting and storage)
+    # Initialize embeddings 
     print(f"Initializing embedding model: {EMBEDDING_MODEL}...")
     embeddings: HuggingFaceEmbeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
-    # 3. Split documents using Semantic Chunking
+    # Split documents using Semantic Chunking
     splits: List[Document] = split_documents(documents, embeddings)
     print(f"Split text into {len(splits)} semantic chunks.")
 
     print(f"Saving vectors to PostgreSQL (Collection: {COLLECTION_NAME})...")
 
     try:
-        # 4. Save to DB (with auto-cleanup of old data)
+        # Save to DB
         vector_store: PGVector = PGVector.from_documents(
             embedding=embeddings,
             documents=splits,
             collection_name=COLLECTION_NAME,
             connection=CONNECTION_STRING,
-            pre_delete_collection=cleanup,  # Use the cleanup flag
+            pre_delete_collection=cleanup,  
         )
         print("Document ingestion completed successfully.")
         return vector_store

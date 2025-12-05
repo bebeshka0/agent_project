@@ -39,16 +39,16 @@ def build_router_chain() -> Runnable:
                     "You are a router that classifies user questions into one of "
                     "two categories: TUTOR or RAG.\n"
                     
-                    "### RULES:\n"
+                    "RULES:\n"
                     "1. Use 'RAG' (Retrieval-Augmented Generation) if the user:\n"
-                    "   - Asks about specific documents, PDF, files, articles, or books.\n"
-                    "   - Asks to find something 'in the text', 'in the book', 'according to the article'.\n"
-                    "   - Asks about specific details that imply searching a knowledge base.\n"
+                    "   Asks about specific documents, PDF, files, articles, or books.\n"
+                    "   Asks to find something 'in the text', 'in the book', 'according to the article'.\n"
+                    "   Asks about specific details that imply searching a knowledge base.\n"
                     
                     "2. Use 'TUTOR' if the question is:\n"
-                    "   - A general concept explanation (e.g., 'What is a neural network?').\n"
-                    "   - A request for code or examples NOT tied to a specific document.\n"
-                    "   - Casual conversation or greetings.\n"
+                    "   A general concept explanation (e.g., 'What is a neural network?').\n"
+                    "   A request for code or examples NOT tied to a specific document.\n"
+                    "   Casual conversation or greetings.\n"
 
                     "\n"
                     "You must answer strictly using the specified format instructions.\n"
