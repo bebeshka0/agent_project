@@ -12,7 +12,10 @@ from langchain_core.documents import Document
 load_dotenv()
 
 DOCS_FOLDER: str = os.getenv("DOCS_FOLDER", "documents")
-EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL: str = os.getenv(
+    "EMBEDDING_MODEL",
+    "intfloat/multilingual-e5-base",
+)
 CONNECTION_STRING: str = os.getenv(
     "POSTGRES_CONNECTION_STRING",
     "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",

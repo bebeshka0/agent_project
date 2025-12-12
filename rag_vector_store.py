@@ -13,7 +13,10 @@ CONNECTION_STRING: str = os.getenv(
     "POSTGRES_CONNECTION_STRING",
     "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",
 )
-EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL: str = os.getenv(
+    "EMBEDDING_MODEL",
+    "intfloat/multilingual-e5-base",
+)
 
 
 def initialize_vector_store() -> Optional[PGVector]:
