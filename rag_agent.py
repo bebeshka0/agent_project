@@ -15,11 +15,13 @@ def _format_context(documents: List[Document]) -> str:
     formatted_chunks: List[str] = []
 
     for index, document in enumerate(documents, start=1):
-        source: str = str(document.metadata.get("source", "unknown_source"))
+        source: str = str(document.metadata.get("original_filename") or document.metadata.get("source", "unknown_source"))
         page: str = str(document.metadata.get("page", document.metadata.get("page_number", "unknown_page")))
+        doc_id: str = str(document.metadata.get("doc_id", "unknown_doc_id"))
+        version: str = str(document.metadata.get("version", "unknown_version"))
         preview: str = document.page_content
 
-        chunk_header: str = f"[Chunk {index}] Source: {source}, Page: {page}"
+        chunk_header: str = f"[Chunk {index}] Doc: {doc_id} (v{version}), Source: {source}, Page: {page}"
         formatted_chunks.append(f"{chunk_header}\n{preview}")
 
     return "\n\n".join(formatted_chunks)
