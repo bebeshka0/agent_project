@@ -149,16 +149,6 @@ def clean_text_content(text: str) -> str:
 
 
 def load_pdf_files(file_paths: List[str], original_filenames: Optional[List[str]] = None) -> List[Document]:
-    """
-    Load PDF files and return per-page documents enriched with document-level metadata.
-
-    Args:
-        file_paths: List of PDF file paths to load.
-        original_filenames: Optional list of original filenames aligned with file_paths.
-
-    Returns:
-        List of per-page documents across all files.
-    """
     if original_filenames is not None and len(original_filenames) != len(file_paths):
         raise ValueError("original_filenames must be the same length as file_paths")
 

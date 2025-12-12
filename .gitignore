@@ -25,6 +25,7 @@ coverage.xml
 .env
 .env.local
 .env.production
+.env.docker
 
 # IDE files
 .vscode/

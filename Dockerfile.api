@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HUB_DISABLE_XET=1
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+# Use CPU-only PyTorch to avoid pulling large CUDA-only dependencies in a slim image.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch && \
+    pip install --no-cache-dir -r /app/requirements.txt && \
+    mkdir -p /app/flashrank_cache && \
+    python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/app/flashrank_cache')"
+
+COPY . /app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
