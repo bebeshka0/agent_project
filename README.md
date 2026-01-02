@@ -25,3 +25,27 @@ agent_project/
 - **Interactive UI**:
   - **Chat Interface**: Clean, WhatsApp-like chat experience.
   - **Document Upload**: Drag-and-drop PDF upload directly in the sidebar to instantly expand the agent's knowledge base.
+
+## Configuration (recommended)
+
+This project is configured via environment variables. For Docker Compose deployments, keep secrets in a local `.env` file on the target machine.
+
+1. Create your local `.env` from the template:
+
+```bash
+cp env.example .env
+```
+
+2. Edit `.env` and set at least:
+   - `POSTGRES_CONNECTION_STRING` (or `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`)
+   - `XAI_API_KEY`
+
+3. Start the stack:
+
+```bash
+docker compose -f docker-compose.app.yaml up -d --build
+```
+
+Notes:
+- The `.env` file is intentionally ignored by git; each deployer should maintain their own copy.
+- On first start, the database tables used by `langchain_postgres` are created automatically by the application when needed.

@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
@@ -15,6 +16,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document
 
+from settings import get_postgres_connection_string
+
 load_dotenv()
 
 DOCS_FOLDER: str = os.getenv("DOCS_FOLDER", "documents")
@@ -22,10 +25,7 @@ EMBEDDING_MODEL: str = os.getenv(
     "EMBEDDING_MODEL",
     "intfloat/multilingual-e5-base",
 )
-CONNECTION_STRING: str = os.getenv(
-    "POSTGRES_CONNECTION_STRING",
-    "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",
-)
+CONNECTION_STRING: str = get_postgres_connection_string()
 COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
 
 
@@ -79,7 +79,14 @@ def _get_collection_id(engine: Engine) -> Optional[str]:
 
     query = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name LIMIT 1;")
     with engine.connect() as conn:
-        row = conn.execute(query, {"name": COLLECTION_NAME}).fetchone()
+        try:
+            row = conn.execute(query, {"name": COLLECTION_NAME}).fetchone()
+        except ProgrammingError as exc:
+            # On first run the LangChain tables may not exist yet.
+            # PGVector will create them later when we initialize the vector store.
+            if "langchain_pg_collection" in str(exc):
+                return None
+            raise
     return str(row[0]) if row is not None else None
 
 
@@ -94,7 +101,15 @@ def _document_exists_by_text_hash(engine: Engine, *, collection_id: str, text_ha
         """
     )
     with engine.connect() as conn:
-        row = conn.execute(query, {"collection_id": collection_id, "text_hash": text_hash}).fetchone()
+        try:
+            row = conn.execute(
+                query,
+                {"collection_id": collection_id, "text_hash": text_hash},
+            ).fetchone()
+        except ProgrammingError as exc:
+            if "langchain_pg_embedding" in str(exc):
+                return False
+            raise
     return row is not None
 
 
