@@ -6,13 +6,12 @@ from langchain_postgres import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.vectorstores import VectorStoreRetriever
 
+from settings import get_postgres_connection_string
+
 load_dotenv()
 
 DOCS_COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "ml_articles_collection")
-CONNECTION_STRING: str = os.getenv(
-    "POSTGRES_CONNECTION_STRING",
-    "postgresql://postgres:mysecretpassword@localhost:5432/vector_db",
-)
+CONNECTION_STRING: str = get_postgres_connection_string()
 EMBEDDING_MODEL: str = os.getenv(
     "EMBEDDING_MODEL",
     "intfloat/multilingual-e5-base",
